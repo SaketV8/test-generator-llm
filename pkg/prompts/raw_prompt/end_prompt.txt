@@ -1,0 +1,11 @@
+
+
+**Strict Output Formatting:**
+You must format your entire response *exactly* as follows, with absolutely no additional commentary, introduction, or explanation before or after the file block.
+
+1.  **File Markers:** Provide the complete, updated content for `test_controllers.cc` wrapped in `[START OF FILE: test/test_controllers.cc]` and `[END OF FILE: test/test_controllers.cc]` markers.
+2.  **No Markdown Fences:** The code you generate inside the file markers **must not** be enclosed in Markdown code fences (i.e., do not use ` ```cpp` or ` ``` `). The output must be the raw, unformatted text of the source file.
+
+**[START OF FILE: test/test_controllers.cc]**
+// The complete and final content of the test_controllers.cc file. This must include all original tests plus the 3-4 new tests you have created, along with any new #include directives required.
+**[END OF FILE: test/test_controllers.cc]**

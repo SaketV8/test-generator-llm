@@ -1,0 +1,21 @@
+
+
+**Primary Goal:**
+Your objective is to write **at least 3 new, production-quality unit tests** for an existing C++ Drogon project. These new tests must be appended to the `test/test_controllers.cc` file.
+
+**Project Context & Constraints:**
+*   **Framework:** The project exclusively uses the Drogon framework and its native testing library (`drogon_test.h`). You are strictly forbidden from introducing any other testing frameworks or libraries.
+*   **File System Integrity:** You must not propose any changes to files outside the `./test/` directory. Modifications to `./test/CMakeLists.txt` are permissible only as a last resort if a new, unlinked dependency is required by your tests.
+*   **Code Style & Idioms:** The new tests must be idiomatically consistent with the existing tests provided in `test/test_controllers.cc`. Mimic the established patterns for `HttpRequest` instantiation, callback definitions, and assertions.
+*   **Header Management:** You are responsible for ensuring all required header files for the controllers under test are included at the top of `test/test_controllers.cc`.
+
+**Test Case Requirements:**
+Generate at least 3 new unit tests targeting the `DepartmentsController`. Your tests should be directly informed by the provided controller source code and the API endpoint documentation. I recommend creating tests for the following scenarios:
+
+1.  **Retrieve a Single Department (Success):** Test the `GET /departments/{id}` endpoint with a valid, existing department ID. Assert that the response status is `k200OK` and that the JSON body contains the correct department data.
+2.  **Retrieve a Single Department (Failure):** Test the `GET /departments/{id}` endpoint with an ID that does not exist. Assert that the response status is `k404NotFound`.
+3.  **Retrieve Department Members:** Test the `GET /departments/{id}/persons` endpoint. Assert that the status is `k200OK` and that the response is a JSON array.
+
+**Authoritative Context (Source of Truth):**
+The following file contents and API documentation are the absolute source of truth. Your generated code must be based solely on this information.
+

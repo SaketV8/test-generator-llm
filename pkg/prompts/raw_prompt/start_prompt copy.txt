@@ -1,0 +1,21 @@
+
+
+**Primary Goal:**
+Your task is to write **at least 3 new, high-quality unit tests** for the existing C++ Drogon project. The new tests must be added to the `test/test_controllers.cc` file.
+
+**Project Context & Constraints:**
+*   **Framework:** The project is built using Drogon and its built-in testing framework (`drogon_test.h`). You **must not** introduce any other testing libraries.
+*   **File Access:** You are strictly forbidden from modifying any files outside of the `./test/` directory. You may modify `./test/CMakeLists.txt` only if a new dependency is absolutely required for a test, but the current configuration should be sufficient.
+*   **Style & Structure:** Your new tests **must** follow the same style, structure, and patterns as the existing tests provided in the `test/test_controllers.cc` file. Pay close attention to how `HttpRequest` objects are created and how responses are handled in the callbacks.
+*   **Headers:** Ensure all necessary controller headers are included at the top of `test/test_controllers.cc`.
+
+**Test Case Requirements:**
+Generate at least 3 new tests focused on the `DepartmentsController`. Use the provided controller source code and API endpoint documentation as a guide. Good test cases would be:
+
+*   A test for retrieving a **single, specific department** by its ID (e.g., `GET /departments/{id}`).
+*   A test for retrieving a **non-existent department** by ID, asserting that it returns a `404 Not Found` status.
+*   A test for retrieving the **members (persons) of a specific department** (e.g., `GET /departments/{id}/persons`).
+
+**Authoritative Context (Source of Truth):**
+Use the following file contents and API documentation as the absolute source of truth for generating the tests.
+

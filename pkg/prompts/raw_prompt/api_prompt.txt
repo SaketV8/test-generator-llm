@@ -1,0 +1,10 @@
+
+
+*   **API Endpoint Documentation:**
+    ```
+    Method  URI                                                     Action
+    -------------------------------------------------------------------------------------------------
+    GET     /departments?limit={}&offset={}&sort_field={}&sort_order={}   Retrieve all departments
+    GET     /departments/{id}                                       Retrieve a department
+    GET     /departments/{id}/persons                               Retrieve department members
+

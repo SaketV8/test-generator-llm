@@ -1,0 +1,48 @@
+
+
+FILE STRUCTURE of the CPP Project
+--------------------------------------
+.
+├──CMakeLists.txt
+├──Dockerfile
+├──config.json
+├──main.cc
+└──run.sh
+controllers/
+├── AuthController.cc
+├── AuthController.h
+├── DepartmentsController.cc
+├── DepartmentsController.h
+├── JobsController.cc
+├── JobsController.h
+├── PersonsController.cc
+└── PersonsController.h
+filters/
+├── LoginFilter.cc
+└── LoginFilter.h
+models/
+├── Department.cc
+├── Department.h
+├── Job.cc
+├── Job.h
+├── Person.cc
+├── Person.h
+├── PersonInfo.cc
+├── PersonInfo.h
+├── User.cc
+├── User.h
+└── model.json
+plugins/
+├── Jwt.cc
+├── Jwt.h
+├── JwtPlugin.cc
+└── JwtPlugin.h
+utils/
+├── utils.cc
+└── utils.h
+test
+├── CMakeLists.txt
+├── test_controllers.cc
+└── test_main.cc
+--------------------------------------
+

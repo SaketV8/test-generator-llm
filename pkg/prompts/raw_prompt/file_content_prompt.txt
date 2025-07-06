@@ -1,0 +1,452 @@
+
+
+*   **`./test/CMakeLists.txt` (for context):**
+    ```cmake
+cmake_minimum_required(VERSION 3.5)
+project(org_chart_test CXX)
+
+# Find Drogon test framework
+find_package(Drogon REQUIRED)
+
+# --- Automatic Source File Discovery ---
+# Use file(GLOB_RECURSE) to automatically find all application source files.
+# This prevents linker errors when you add new files to the project.
+# ${CMAKE_SOURCE_DIR} refers to the root directory of the project.
+file(GLOB_RECURSE APP_SOURCES
+    "${CMAKE_SOURCE_DIR}/controllers/*.cc"
+    "${CMAKE_SOURCE_DIR}/models/*.cc"
+    "${CMAKE_SOURCE_DIR}/filters/*.cc"
+    "${CMAKE_SOURCE_DIR}/plugins/*.cc"
+    "${CMAKE_SOURCE_DIR}/utils/*.cc"
+)
+
+# --- Test Executable ---
+# Add the test executable, including its own files and all the discovered
+# application source files.
+add_executable(${PROJECT_NAME}
+    test_main.cc
+    test_controllers.cc
+    ${APP_SOURCES}
+)
+
+# --- Include Directories ---
+# Add all directories where header files might be located.
+target_include_directories(${PROJECT_NAME} PRIVATE
+    ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/third_party/drogon/lib/inc
+    ${CMAKE_SOURCE_DIR}/third_party/drogon/orm_lib/inc
+    ${CMAKE_SOURCE_DIR}/third_party/jwt-cpp/include
+    ${CMAKE_SOURCE_DIR}/controllers
+    ${CMAKE_SOURCE_DIR}/models
+    ${CMAKE_SOURCE_DIR}/utils
+    ${CMAKE_SOURCE_DIR}/filters
+    ${CMAKE_SOURCE_DIR}/plugins
+)
+
+# --- Link Libraries ---
+# Link against Drogon and the bcrypt library for password hashing.
+target_link_libraries(${PROJECT_NAME} PRIVATE drogon bcrypt)
+
+# --- Test Setup ---
+# Enable test discovery for CTest
+enable_testing()
+add_test(NAME ${PROJECT_NAME} COMMAND ${PROJECT_NAME})
+ParseAndAddDrogonTests(${PROJECT_NAME})
+    ```
+
+*   **`./test/test_main.cc` (for context):**
+    ```cpp
+#define DROGON_TEST_MAIN
+#include <drogon/drogon.h>
+#include <drogon/drogon_test.h>
+
+int main(int argc, char** argv)
+{
+    using namespace drogon;
+
+    std::promise<void> p1;
+    std::future<void> f1 = p1.get_future();
+
+    // Start the main loop on another thread
+    std::thread thr([&]() {
+        // Load the configuration file
+        app().loadConfigFile("../../config.json");
+
+        // Queues the promise to be fulfilled after starting the loop
+        app().getLoop()->queueInLoop([&p1]() { p1.set_value(); });
+        app().run();
+    });
+
+    // The future is only satisfied after the event loop started
+    f1.get();
+    int status = test::run(argc, argv);
+
+    // Ask the event loop to shutdown and wait
+    app().getLoop()->queueInLoop([]() { app().quit(); });
+    thr.join();
+    return status;
+}
+    ```
+
+*   **`./test/test_controllers.cc` (This is the file you will modify):**
+    ```cpp
+#include <drogon/drogon.h>
+#include <drogon/drogon_test.h>
+#include "../controllers/DepartmentsController.h"
+#include "../models/Department.h"
+#include "../models/Person.h"
+#include "../models/Job.h"
+#include "../utils/utils.h"
+#include "../filters/LoginFilter.h"
+#include "../plugins/Jwt.h"
+#include "../plugins/JwtPlugin.h"
+
+
+DROGON_TEST(DepartmentsControllerGetTest)
+{
+    // Create an instance of the controller
+    DepartmentsController controller;
+
+    // Create a mock HTTP request
+    auto req = drogon::HttpRequest::newHttpRequest();
+    req->setPath("/departments");
+    req->setMethod(drogon::Get);
+
+    // Call the get method with a callback
+    controller.get(req, [TEST_CTX](const drogon::HttpResponsePtr& resp) {
+        // Check the response
+        REQUIRE(resp != nullptr);
+        CHECK(resp->getStatusCode() == drogon::k200OK);
+
+        // You can add more checks here, for example, to validate the JSON response
+        auto json = resp->getJsonObject();
+        CHECK(json != nullptr);
+    });
+}
+
+DROGON_TEST(HttpRequestTest)
+{
+    // Test creating an HTTP request
+    auto req = drogon::HttpRequest::newHttpRequest();
+    req->setPath("/departments");
+    req->setMethod(drogon::Get);
+    req->addHeader("Content-Type", "application/json");
+    
+    // Verify request properties
+    CHECK(req->path() == "/departments");
+    CHECK(req->method() == drogon::Get);
+    CHECK(req->getHeader("Content-Type") == "application/json");
+    
+    std::cout << "HTTP request test passed!" << std::endl;
+}
+
+DROGON_TEST(RemoteAPITest)
+{
+    std::cout << "Starting RemoteAPITest..." << std::endl;
+    auto client = drogon::HttpClient::newHttpClient("http://localhost:3000");
+    auto req = drogon::HttpRequest::newHttpRequest();
+    req->setPath("/departments");
+    client->sendRequest(req, [TEST_CTX](drogon::ReqResult res, const drogon::HttpResponsePtr& resp) {
+        // There's nothing we can do if the request didn't reach the server
+        // or the server generated garbage.
+        REQUIRE(res == drogon::ReqResult::Ok);
+        REQUIRE(resp != nullptr);
+        
+        CHECK(resp->getStatusCode() == drogon::k200OK);
+        CHECK(resp->contentType() == drogon::CT_APPLICATION_JSON);
+    });
+    std::cout << "RemoteAPITest END" << std::endl;
+}
+    ```
+
+*   **`controllers/DepartmentsController.h` (for function signatures):**
+    ```cpp
+#pragma once
+
+#include <drogon/HttpController.h>
+#include "../models/Department.h"
+
+using namespace drogon;
+using namespace drogon_model::org_chart;
+
+class DepartmentsController : public drogon::HttpController<DepartmentsController> {
+ public:
+    METHOD_LIST_BEGIN
+      ADD_METHOD_TO(DepartmentsController::get, "/departments", Get);
+      ADD_METHOD_TO(DepartmentsController::getOne, "/departments/{1}", Get);
+      ADD_METHOD_TO(DepartmentsController::createOne, "/departments", Post, "LoginFilter");
+      ADD_METHOD_TO(DepartmentsController::updateOne, "/departments/{1}", Put, "LoginFilter");
+      ADD_METHOD_TO(DepartmentsController::deleteOne, "/departments/{1}", Delete, "LoginFilter");
+      ADD_METHOD_TO(DepartmentsController::getDepartmentPersons, "/departments/{1}/persons", Get, "LoginFilter");
+    METHOD_LIST_END
+
+    void get(const HttpRequestPtr& req, std::function<void(const HttpResponsePtr &)> &&callback) const;
+    void getOne(const HttpRequestPtr& req, std::function<void(const HttpResponsePtr &)> &&callback, int pDepartmentId) const;
+    void createOne(const HttpRequestPtr &req, std::function<void(const HttpResponsePtr &)> &&callback, Department &&pDepartment) const;
+    void updateOne(const HttpRequestPtr &req, std::function<void(const HttpResponsePtr &)> &&callback, int pDepartmentId, Department &&pDepartment) const;
+    void deleteOne(const HttpRequestPtr &req, std::function<void(const HttpResponsePtr &)> &&callback, int pDepartmentId) const;
+    void getDepartmentPersons(const HttpRequestPtr &req, std::function<void(const HttpResponsePtr &)> &&callback, int departmentId) const;
+};
+    ```
+
+*   **`controllers/DepartmentsController.cc` (for implementation logic):**
+    ```cpp
+#include "DepartmentsController.h"
+#include "../utils/utils.h"
+#include "../models/Person.h"
+#include <string>
+#include <memory>
+#include <utility>
+#include <vector>
+
+using namespace drogon::orm;
+using namespace drogon_model::org_chart;
+
+namespace drogon {
+    template<>
+    inline Department fromRequest(const HttpRequest &req) {
+        auto jsonPtr = req.getJsonObject();
+        auto json = *jsonPtr;
+        auto department = Department(json);
+        return department;
+    }
+}  // namespace drogon
+
+void DepartmentsController::get(const HttpRequestPtr &req, std::function<void(const HttpResponsePtr &)> &&callback) const {
+    LOG_DEBUG << "get";
+    auto offset = req->getOptionalParameter<int>("offset").value_or(0);
+    auto limit = req->getOptionalParameter<int>("limit").value_or(25);
+    auto sortField = req->getOptionalParameter<std::string>("sort_field").value_or("id");
+    auto sortOrder = req->getOptionalParameter<std::string>("sort_order").value_or("asc");
+    auto sortOrderEnum = sortOrder == "asc" ? SortOrder::ASC : SortOrder::DESC;
+
+    auto callbackPtr = std::make_shared<std::function<void(const HttpResponsePtr &)>>(std::move(callback));
+    auto dbClientPtr = drogon::app().getDbClient();
+    Mapper<Department> mp(dbClientPtr);
+    mp.orderBy(sortField, sortOrderEnum).offset(offset).limit(limit).findAll(
+        [callbackPtr](const std::vector<Department> &departments) {
+            Json::Value ret{};
+            for (auto d : departments) {
+                ret.append(d.toJson());
+            }
+            auto resp = HttpResponse::newHttpJsonResponse(ret);
+            resp->setStatusCode(HttpStatusCode::k200OK);
+            (*callbackPtr)(resp);
+        },
+        [callbackPtr](const DrogonDbException &e) {
+            LOG_ERROR << e.base().what();
+            auto resp = HttpResponse::newHttpJsonResponse(makeErrResp("database error"));
+            resp->setStatusCode(HttpStatusCode::k500InternalServerError);
+            (*callbackPtr)(resp);
+    });
+}
+
+void DepartmentsController::getOne(const HttpRequestPtr &req, std::function<void(const HttpResponsePtr &)> &&callback, int departmentId) const {
+    LOG_DEBUG << "getOne departmentId: "<< departmentId;
+    auto callbackPtr = std::make_shared<std::function<void(const HttpResponsePtr &)>>(std::move(callback));
+    auto dbClientPtr = drogon::app().getDbClient();
+
+    Mapper<Department> mp(dbClientPtr);
+    mp.findByPrimaryKey(
+        departmentId,
+        [callbackPtr](const Department &department) {
+            Json::Value ret{};
+            ret = department.toJson();
+            auto resp = HttpResponse::newHttpJsonResponse(ret);
+            resp->setStatusCode(HttpStatusCode::k201Created);
+            (*callbackPtr)(resp);
+        },
+        [callbackPtr](const DrogonDbException &e) {
+            const drogon::orm::UnexpectedRows *s = dynamic_cast<const drogon::orm::UnexpectedRows *>(&e.base());
+            if(s) {
+                auto resp = HttpResponse::newHttpResponse();
+                resp->setStatusCode(k404NotFound);
+                (*callbackPtr)(resp);
+                return;
+            }
+            LOG_ERROR << e.base().what();
+            auto resp = HttpResponse::newHttpJsonResponse(makeErrResp("database error"));
+            resp->setStatusCode(HttpStatusCode::k500InternalServerError);
+            (*callbackPtr)(resp);
+    });
+}
+
+void DepartmentsController::createOne(const HttpRequestPtr &req, std::function<void(const HttpResponsePtr &)> &&callback, Department &&pDepartment) const {
+    LOG_DEBUG << "createOne";
+    auto callbackPtr = std::make_shared<std::function<void(const HttpResponsePtr &)>>(std::move(callback));
+    auto dbClientPtr = drogon::app().getDbClient();
+
+    Mapper<Department> mp(dbClientPtr);
+    mp.insert(
+        pDepartment,
+        [callbackPtr](const Department &department) {
+            Json::Value ret{};
+            ret = department.toJson();
+            auto resp = HttpResponse::newHttpJsonResponse(ret);
+            resp->setStatusCode(HttpStatusCode::k201Created);
+            (*callbackPtr)(resp);
+        },
+        [callbackPtr](const DrogonDbException &e) {
+            LOG_ERROR << e.base().what();
+            auto resp = HttpResponse::newHttpJsonResponse(makeErrResp("database error"));
+            resp->setStatusCode(HttpStatusCode::k500InternalServerError);
+            (*callbackPtr)(resp);
+    });
+}
+
+void DepartmentsController::updateOne(const HttpRequestPtr &req, std::function<void(const HttpResponsePtr &)> &&callback, int departmentId, Department &&pDepartmentDetails) const {
+    LOG_DEBUG << "updateOne departmentId: " << departmentId;
+    auto dbClientPtr = drogon::app().getDbClient();
+
+    // blocking IO
+    Mapper<Department> mp(dbClientPtr);
+    Department department;
+    try {
+        department = mp.findFutureByPrimaryKey(departmentId).get();
+    } catch (const DrogonDbException & e) {
+        Json::Value ret{};
+        ret["error"] = "resource not found";
+        auto resp = HttpResponse::newHttpJsonResponse(ret);
+        resp->setStatusCode(HttpStatusCode::k404NotFound);
+        callback(resp);
+    }
+
+    if (pDepartmentDetails.getName() != nullptr) {
+        department.setName(pDepartmentDetails.getValueOfName());
+    }
+
+    auto callbackPtr = std::make_shared<std::function<void(const HttpResponsePtr &)>>(std::move(callback));
+    mp.update(
+        department,
+        [callbackPtr](const std::size_t count)
+        {
+            auto resp = HttpResponse::newHttpResponse();
+            resp->setStatusCode(HttpStatusCode::k204NoContent);
+            (*callbackPtr)(resp);
+        },
+        [callbackPtr](const DrogonDbException &e)
+        {
+            LOG_ERROR << e.base().what();
+            auto resp = HttpResponse::newHttpJsonResponse(makeErrResp("database error"));
+            resp->setStatusCode(HttpStatusCode::k500InternalServerError);
+            (*callbackPtr)(resp);
+        }
+    );
+}
+
+void DepartmentsController::deleteOne(const HttpRequestPtr &req, std::function<void(const HttpResponsePtr &)> &&callback, int departmentId) const {
+    LOG_DEBUG << "deleteOne departmentId: ";
+    auto callbackPtr = std::make_shared<std::function<void(const HttpResponsePtr &)>>(std::move(callback));
+    auto dbClientPtr = drogon::app().getDbClient();
+
+    Mapper<Department> mp(dbClientPtr);
+    mp.deleteBy(
+        Criteria(Department::Cols::_id, CompareOperator::EQ, departmentId),
+        [callbackPtr](const std::size_t count) {
+            auto resp = HttpResponse::newHttpResponse();
+            resp->setStatusCode(HttpStatusCode::k204NoContent);
+            (*callbackPtr)(resp);
+        },
+        [callbackPtr](const DrogonDbException &e) {
+            LOG_ERROR << e.base().what();
+            auto resp = HttpResponse::newHttpJsonResponse(makeErrResp("database error"));
+            resp->setStatusCode(HttpStatusCode::k500InternalServerError);
+            (*callbackPtr)(resp);
+    });
+}
+
+void DepartmentsController::getDepartmentPersons(const HttpRequestPtr &req, std::function<void(const HttpResponsePtr &)> &&callback, int departmentId) const {
+    LOG_DEBUG << "getDepartmentPersons departmentId: "<< departmentId;
+    auto callbackPtr = std::make_shared<std::function<void(const HttpResponsePtr &)>>(std::move(callback));
+    auto dbClientPtr = drogon::app().getDbClient();
+
+    // blocking IO
+    Mapper<Department> mp(dbClientPtr);
+    Department department;
+    try {
+        department = mp.findFutureByPrimaryKey(departmentId).get();
+    } catch (const DrogonDbException & e) {
+        Json::Value ret{};
+        ret["error"] = "resource not found";
+        auto resp = HttpResponse::newHttpJsonResponse(ret);
+        resp->setStatusCode(HttpStatusCode::k404NotFound);
+        callback(resp);
+    }
+
+    department.getPersons(dbClientPtr,
+      [callbackPtr](const std::vector<Person> persons) {
+          if (persons.empty()) {
+              Json::Value ret{};
+              ret["error"] = "resource not found";
+              auto resp = HttpResponse::newHttpJsonResponse(ret);
+              resp->setStatusCode(HttpStatusCode::k404NotFound);
+              (*callbackPtr)(resp);
+          } else {
+              Json::Value ret{};
+              for (auto p : persons) {
+                  ret.append(p.toJson());
+              }
+              auto resp = HttpResponse::newHttpJsonResponse(ret);
+              resp->setStatusCode(HttpStatusCode::k200OK);
+              (*callbackPtr)(resp);
+          }
+      },
+      [callbackPtr](const DrogonDbException &e) {
+          LOG_ERROR << e.base().what();
+          Json::Value ret{};
+          ret["error"] = "database error";
+          auto resp = HttpResponse::newHttpJsonResponse(ret);
+          resp->setStatusCode(HttpStatusCode::k500InternalServerError);
+          (*callbackPtr)(resp);
+      });
+}
+    ```
+
+*   **`controllers/PersonsController.h` (for implementation logic):**
+    ```cpp
+#pragma once
+
+#include <drogon/HttpController.h>
+#include <string>
+#include "../models/Person.h"
+#include "../models/PersonInfo.h"
+
+using namespace drogon;
+using namespace drogon_model::org_chart;
+
+class PersonsController : public drogon::HttpController<PersonsController> {
+ public:
+    METHOD_LIST_BEGIN
+      ADD_METHOD_TO(PersonsController::get, "/persons", Get);
+      ADD_METHOD_TO(PersonsController::getOne, "/persons/{1}", Get);
+      ADD_METHOD_TO(PersonsController::createOne, "/persons", Post);
+      ADD_METHOD_TO(PersonsController::updateOne, "/persons/{1}", Put);
+      ADD_METHOD_TO(PersonsController::deleteOne, "/persons/{1}", Delete);
+      ADD_METHOD_TO(PersonsController::getDirectReports, "/persons/{1}/reports", Get);
+    METHOD_LIST_END
+
+    void get(const HttpRequestPtr& req, std::function<void(const HttpResponsePtr &)> &&callback) const;
+    void getOne(const HttpRequestPtr& req, std::function<void(const HttpResponsePtr &)> &&callback, int pPersonId) const;
+    void createOne(const HttpRequestPtr &req, std::function<void(const HttpResponsePtr &)> &&callback, Person &&pPerson) const;
+    void updateOne(const HttpRequestPtr &req, std::function<void(const HttpResponsePtr &)> &&callback, int pPersonId, Person &&pPerson) const;
+    void deleteOne(const HttpRequestPtr &req, std::function<void(const HttpResponsePtr &)> &&callback, int pPersonId) const;
+    void getDirectReports(const HttpRequestPtr &req, std::function<void(const HttpResponsePtr &)> &&callback, int pPersonId) const;
+
+ private:
+    struct PersonDetails {
+        int id;
+        std::string first_name;
+        std::string last_name;
+        trantor::Date hire_date;
+        Json::Value manager;
+        Json::Value department;
+        Json::Value job;
+        PersonDetails() {}
+        explicit PersonDetails(const PersonInfo &personInfo);
+        Json::Value toJson();
+    };
+};
+
+    ```
+
+    

@@ -1,0 +1,4 @@
+After you generated the code for the test/test_controller.cc it is giving this error while building the binary
+
+Error Details:
+---
