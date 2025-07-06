@@ -2,7 +2,6 @@
 /test-generator-llm
 /build-Logs
 /llmOutput
-/test
 
 # Tests
 /coverage.out
