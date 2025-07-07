@@ -47,6 +47,19 @@ git clone https://github.com/saketv8/test-generator-llm.git
 ```sh
 cd test-generator-llm
 ```
+- Setup Env Variable:
+
+> [!IMPORTANT]  
+> get your own github personal access Token [Here](https://github.com/settings/tokens)
+
+```sh
+# rename <.env.example> to <.env>
+# and
+# set your own github_token
+
+# sample
+GITHUB_PAT=YOUR_GITHUB_PERSONAL_ACCESS_TOKEN_GOES_HERE
+```
 
 - Install dependencies:
 ```sh
